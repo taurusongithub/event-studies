@@ -8,7 +8,6 @@ import pandas as pd
 import pandas.api.types as ptypes
 from event_studies.models.linear_models import OLS
 from typing import NoReturn, List, Optional
-from scipy.stats import t as t_student
 
 __all__ = ["MarketModel"]
 
@@ -146,17 +145,60 @@ class MarketModel:
         abnormal_returns = self.abnormal_returns(*args, **kwargs)
         abnormal_returns_variance = self.abnormal_returns_variance(*args,
                                                                    **kwargs)
+        aggregations = {}
         l2 = len(abnormal_returns)
+        event_window_size = window_end - window_start + 1
         gamma = np.concatenate((np.zeros((window_start, 1)),
-                                np.ones((window_end - window_start + 1, 1)),
+                                np.ones((event_window_size, 1)),
                                 np.zeros((l2 - window_end - 1, 1))), axis=0)
+
         car = np.matmul(np.transpose(gamma), abnormal_returns)[0, 0]
         var_car = np.matmul(np.transpose(gamma),
                             np.matmul(abnormal_returns_variance, gamma))[0, 0]
         scar = car / np.sqrt(var_car)
-        aggregations = {"car": car, "scar": scar, "var_car": var_car,
-                        "scar_t_student_df": (len(self.ols_.x_) - 2)}
-        scar_distribution = t_student(aggregations["scar_t_student_df"])
-        aggregations["p_value_two_sided"] = scar_distribution.sf(abs(scar)) * 2
+        aggregations["event_window_size"] = event_window_size
+        aggregations["parametric"] = {"car": car, "scar": scar,
+                                      "var_car": var_car,
+                                      "scar_t_student_df": (len(self.ols_.x_)
+                                                            - 2)}
+        excess_returns = np.concatenate((self.ols_.residuals_,
+                                         abnormal_returns))
+        # for the rank test
+        aggregations["ar_total_midranks"] = self._midranks(excess_returns)
+        # for the sign test
+        name = "estimation_window_ar_sign"
+        aggregations[name] = np.where(self.ols_.residuals_ > 0,
+                                      1.0, 0.0).mean()
 
         return aggregations
+
+    @staticmethod
+    def _midranks(values: np.ndarray) -> np.ndarray:
+        """TODO."""
+
+        n = len(values)
+        assert values.shape == (n, 1), "Shape not allowed!"
+
+        temp = values.argsort(axis=0)
+        ranks = np.zeros(temp.shape, dtype=float)
+
+        mid_ranks = []
+        k_smaller = 0
+        l_ties = 1
+        last_number = values.min()
+
+        for iter_count, idx in enumerate(temp[1:, 0]):
+            num = values[idx, 0]
+            if num > last_number:
+                mid_ranks += list(np.repeat(k_smaller + (1 + l_ties) / 2,
+                                            l_ties))
+                # flush
+                l_ties = 1
+                k_smaller = iter_count + 1
+                last_number = num
+            else:
+                l_ties += 1
+
+        mid_ranks += list(np.repeat(k_smaller + (1 + l_ties) / 2, l_ties))
+        ranks[temp] = np.array(mid_ranks).reshape(len(mid_ranks), 1, 1)
+        return ranks
