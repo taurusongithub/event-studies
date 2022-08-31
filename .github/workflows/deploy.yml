@@ -27,6 +27,7 @@ jobs:
   PROD_deployment:
     runs-on: ubuntu-latest
     environment: PROD
+    needs: DEV_deployment
     steps:
       - uses: actions/checkout@v3
       - name: Set up conda environment
