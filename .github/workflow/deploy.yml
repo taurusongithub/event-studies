@@ -1,0 +1,43 @@
+name: Deploy
+
+on:
+  # manual
+  - workflow_dispatch
+
+jobs:
+
+  DEV_deployment:
+    runs-on: ubuntu-latest
+    environment: DEV
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up conda environment
+        run: conda env create -f ./environment.yml
+      - name: Update pip
+        run: $CONDA/envs/event-studies/bin/python -m pip install --upgrade pip
+      - name: Build package
+        run: |
+          $CONDA/envs/data_structures/bin/python -m pip install --upgrade build
+          $CONDA/envs/data_structures/bin/python -m build
+      - name: Upload to PyPi
+        run: |
+          $CONDA/envs/data_structures/bin/python -m pip install --upgrade twine
+          $CONDA/envs/data_structures/bin/python -m twine upload --repository testpypi dist/* -u __token__ -p ${{ secrets.PYPI_TOKEN }}
+
+  PROD_deployment:
+    runs-on: ubuntu-latest
+    environment: PROD
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up conda environment
+        run: conda env create -f ./environment.yml
+      - name: Update pip
+        run: $CONDA/envs/data_structures/bin/python -m pip install --upgrade pip
+      - name: Build package
+        run: |
+          $CONDA/envs/data_structures/bin/python -m pip install --upgrade build
+          $CONDA/envs/data_structures/bin/python -m build
+      - name: Upload to PyPi
+        run: |
+          $CONDA/envs/data_structures/bin/python -m pip install --upgrade twine
+          $CONDA/envs/data_structures/bin/python -m twine upload dist/* -u __token__ -p ${{ secrets.PYPI_TOKEN }}
