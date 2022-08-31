@@ -5,6 +5,10 @@ channels:
 
 dependencies:
   - python=3.9
+  - build
+  - pandas
+  - openpyxl
+  - scipy
   - pip
   - pip:
       - jupyterlab
